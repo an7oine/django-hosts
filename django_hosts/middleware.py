@@ -15,7 +15,7 @@ class HostsBaseMiddleware(MiddlewareMixin):
     toolbar_middleware = 'debug_toolbar.middleware.DebugToolbarMiddleware'
 
     def __init__(self, get_response=None):
-        self.get_response = get_response
+        super().__init__(get_response)
         self.current_urlconf = None
         self.host_patterns = get_host_patterns()
         try:

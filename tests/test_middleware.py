@@ -1,3 +1,15 @@
+import asyncio
+from unittest import skipUnless
+
+# Not guaranteed / nonexistent for Django below 3.0/3.1.
+try:
+  from asgiref.sync import async_to_sync
+  from django.utils.decorators import async_only_middleware
+except ImportError:
+  async_to_sync = lambda af: af
+  async_only_middleware = lambda f: f
+
+import django
 from django.http import HttpResponse
 from django.test import RequestFactory
 from django.test.utils import override_settings
@@ -7,6 +19,12 @@ from django_hosts.middleware import (HostsRequestMiddleware,
                                      HostsResponseMiddleware)
 
 from .base import HostsTestCase
+
+
+@async_only_middleware
+def async_middleware(get_response):
+    assert asyncio.iscoroutinefunction(get_response)
+    return get_response
 
 
 class MiddlewareTests(HostsTestCase):
@@ -75,6 +93,19 @@ class MiddlewareTests(HostsTestCase):
         # middleware's __init__() assigns the get_response attribute.
         response = self.client.get('/')
         self.assertEqual(response.status_code, 404)
+
+    @skipUnless(django.VERSION >= (3, 1), 'Django 3.1+ only')
+    @override_settings(
+        ROOT_HOSTCONF='tests.hosts.simple',
+        DEFAULT_HOST='www',
+        MIDDLEWARE=[
+            'django_hosts.middleware.HostsRequestMiddleware',
+            __module__ + '.async_middleware',
+            'django_hosts.middleware.HostsResponseMiddleware',
+        ])
+    @async_to_sync
+    async def test_asgi_request(self):
+        await self.async_client.get('/')
 
     @override_settings(
         ROOT_HOSTCONF='tests.hosts.simple',
